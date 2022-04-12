@@ -1,0 +1,135 @@
+---
+title: "Assignment 3"
+author: "Sebastian Bravo"
+student id: "000854810"
+date: "April 8, 2022"
+output: html_document
+---
+# Animal Bites in Louisville Kentucky 1985 - 2017
+## by Sebastian Bravo
+### Dataset Source: https://www.kaggle.com/datasets/rtatman/animal-bites
+
+## Information on Dataset     
+
+This analysis is based off of a dataset obtained from Kaggle titled *Animal Bites*. The context of this dataset is that it was collected based on reports of bites to law enforcement as therre is a concern for rabies in animal bites. This data set is on over 9,000 animal bites that occurred near Louisville, Kentucky in the time period of 1985 - 2017. For more information on this dataset the link to it is [here](https://www.kaggle.com/datasets/rtatman/animal-bites).     
+
+**Importing Libraries**     
+
+We will be making use of dplyr and ggplot2 to do the analysis on this dataset, so we will need to install and import these libraries first and foremost.     
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats) #So I can reorder bar plots by length
+```
+
+**Importing data**    
+
+We will import the .csv file from the working directory and quickly clean some of the data as there are blanks that were chosen to be left blank when certain information was not known. These blank values will have their value changed to "N/A", but might also be changed to UNKNOWN in the future where applicable.    
+
+```{r}
+Rabies<-read.csv("Health_AnimalBites.csv")
+Rabies[Rabies==""] <- "N/A"
+head(Rabies)
+```
+
+# Analysis     
+
+As the dataset contains information such as type of animal that caused the bite, breed if it's a dog, track the amount of bites year by year, as well as get an understanding of the proportion of bites that are later tested positive for Rabies. We can quickly construct a table and a bar plot to see which animals have the most reported bites in this time period and area.     
+
+```{r}
+Rabies$SpeciesIDDesc[Rabies$SpeciesIDDesc==""] <- "UNKNOWN" #Here is an example where having N/A as Unknown makes sense    
+Rabies %>% 
+  group_by(Rabies$SpeciesIDDesc) %>% 
+  summarize(Count=n()) %>% 
+  arrange(desc(Count))
+
+```
+
+Now we construct the bar chart to display this in a more digestible medium        
+```{r}
+Rabies %>% 
+  ggplot(aes(x = fct_infreq(SpeciesIDDesc))) + 
+  geom_bar() +
+  labs(x ="Species") +
+  labs(y = "Count of Bites") 
+```
+
+```
+We can see immediately that the vast amount of bites come from domesticated animals. Dogs have a total of `r sum(Rabies$SpeciesIDDesc == 'DOG')` bites, followed by cats at `r sum(Rabies$SpeciesIDDesc == 'CAT')` bites. After that however, it is observable that the wild animal with the most bites are bats at `r sum(Rabies$SpeciesIDDesc == 'BAT')`
+```
+With these findings we should focus more on Dog, Cat, and Bat bites. But before we jump into that we should track the total number of bites and rabies cases on a year to year basis through a line plot.
+
+### Bites and Rabies Cases year by year
+
+```{r, results='hide'}
+Rabies$bite_date <- as.Date(Rabies$bite_date) ###Need to change the data type of this column to date in order to create a new one for Year
+Rabies[, "Year"] <- format(Rabies[, "bite_date"], "%Y")
+
+Yearly_Count <- Rabies %>%  #Unique Dataset for the line graph
+  count(Year,SpeciesIDDesc)
+
+Yearly_Count$Year <- as.integer(Yearly_Count$Year) # Parse Year as Integer
+
+Yearly_Count <- filter(Yearly_Count, Year >= 1985 & Year <= 2017)
+Yearly_Count <- filter(Yearly_Count, SpeciesIDDesc == "DOG" | SpeciesIDDesc == "CAT" | SpeciesIDDesc == "BAT") #Further filtering this dataset by year and species
+```
+
+The first part of this process is to organize the dataset a bit by deriving a new column of year to the dataset using the "Bite_Date" columnn. However the "Bite_Date" column needs to be parsed as a date type first as it was originally just a string. Once this is done and we have our new Year Column a new subsection of the dataset was created to count the occurrences of bites per year by animal. This data was further filtered to be between the years of 1985 to 2017 (inclusive) as there were a few null values, and then further filtered to only show Dog, Cat, and Bat bites as we previously noted that these were the most significant     
+
+```{r}
+ggplot(data = Yearly_Count, aes(x = Year, y = n)) +
+  geom_line() +
+  facet_wrap(facets = vars(SpeciesIDDesc))
+
+```
+
+Faceted line plots are generated for the three species we want to analyze. What we can immediately see is that bites appear to increase substantially from 2010 onwards. However, this seems like when more people reported bites to animal control or the police department. From that point onward we can see that the trend goes downward from that point onward. Now that we have this lets look at the proportion of bites that were tested to be related to Rabies.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+### Proportion of Bites Associated with Rabies
+
+```{r}
+Rabies <- filter(Rabies, SpeciesIDDesc == "DOG" | SpeciesIDDesc == "CAT" | SpeciesIDDesc == "BAT") #Filtering the main dataset by the same three species
+
+Rabies$ResultsIDDesc[Rabies$ResultsIDDesc=="N/A"] <- "UNKNOWN"
+
+CountRabiesStatus <- Rabies %>% #Create a new dataset for stacked column chart with percentages
+  count(SpeciesIDDesc,ResultsIDDesc) %>%   #Count by Species and then by Test Results
+  mutate(pct=n/sum(n))
+
+```
+
+The first thing to do in this case is to filter our dataset by the three species we are focusing in on. As we want to see the amount of cases in proportion to the total of these three were associated with a positive test for Rabies - as denoted in the "ResultsIDDesc" column. However, there is a significant amount of Unknown values, implying that not all bites were tested for rabies. We first make a nother subsection of our dataset to make this plot using a count of Species and Results and then adding another column "Pct" for the percentage.
+
+```{r}
+ggplot(Rabies, aes(x=SpeciesIDDesc, fill=ResultsIDDesc)) +
+  geom_bar (position = "fill")
+```
+
+Immediately we can see a large amount of Unknowns for both Cats and Dogs, largely due to the fact they're domesticated. We know that the ResultsIDDesc is described as being "results from lab tests (for rabies)" so it seems to make sense that people bit by domesticated animals, wouldn't require a lab test as they are most likely to have documentation supporting a Rabies vaccination as required. Bats, however we can see some positive lab tests. To get a look at the real numbers of the amount of cases that resulted in positive cases we can break it down as follows:    
+
+* There were `r sum(Rabies$SpeciesIDDesc == 'DOG' & Rabies$ResultsIDDesc == 'POSITIVE')` dog bite(s) that tested positive for Rabies, this accounted for `r CountRabiesStatus[7,4]*100`% of all dog bites.            
+* There were `r sum(Rabies$SpeciesIDDesc == 'CAT' & Rabies$ResultsIDDesc == 'POSITIVE')` cat bite(s) that tested positive for Rabies.       
+* There were `r sum(Rabies$SpeciesIDDesc == 'BAT' & Rabies$ResultsIDDesc == 'POSITIVE')` bat bite(s) that tested positive for Rabies, this accounted for `r CountRabiesStatus[2,4]*100`% of all bat bites.   
+
+This means that most bites don't spread Rabies in the modern world in Louisville. Finally the last thing I want to analyze are the type of breeds of Dogs that account for most Dog bites.       
+
+### Dog Bites by Breed
+
+```{r}
+BreedBites <- Rabies %>% #Create a new subsection for breeds
+  filter(SpeciesIDDesc == "DOG") %>% #Filter to only have Dog Bites
+  group_by(BreedIDDesc) %>% 
+  summarize(Count=n()) %>% 
+  arrange(desc(Count)) %>%
+  mutate(pct = (Count/sum(Count))*100)
+
+BreedBites
+```
+
+Breaking down the amount of dog bites reveals some immediately interesting information. Barring the fact that most dog breeds are N/A - not reported or not known, Pit Bull has the most out of known breeds accounting for 15.7% of Dog Bites. The next breed of dog that accounts for most bites are German Shephards at 4.65% this is a huge difference in proportionality between the two breeds as the rest of the breeds in the top 10 cluster together. It does generally align with common sentiment that the Pit Bull is classified as a more "aggressive" breed of dog.
+
+### This is the end of the report, last updated 2022-04-08   
+
+###
